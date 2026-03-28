@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>LinkedIn AI Detector</title>
+  <link rel="stylesheet" href="popup.css" />
+</head>
+<body>
+  <div class="popup">
+    <header class="popup__header">
+      <span class="popup__icon">🤖🔍</span>
+      <div>
+        <h1 class="popup__title">AI Detector</h1>
+        <p class="popup__subtitle">LinkedIn Post Analyse</p>
+      </div>
+      <label class="popup__toggle" title="Extension ein/aus">
+        <input type="checkbox" id="toggleEnabled" checked />
+        <span class="popup__toggle-slider"></span>
+      </label>
+    </header>
+
+    <section class="popup__stats" id="statsSection">
+      <div class="popup__stat-headline" id="statHeadline">
+        Warte auf Analyse...
+      </div>
+
+      <div class="popup__bar-container">
+        <div class="popup__bar">
+          <div class="popup__bar-fill popup__bar-fill--human" id="barHuman" style="width: 0%"></div>
+          <div class="popup__bar-fill popup__bar-fill--uncertain" id="barUncertain" style="width: 0%"></div>
+          <div class="popup__bar-fill popup__bar-fill--ai" id="barAI" style="width: 0%"></div>
+        </div>
+      </div>
+
+      <div class="popup__legend">
+        <span class="popup__legend-item popup__legend-item--human">
+          <span class="popup__dot popup__dot--human"></span>
+          <span id="countHuman">0</span> Mensch
+        </span>
+        <span class="popup__legend-item popup__legend-item--uncertain">
+          <span class="popup__dot popup__dot--uncertain"></span>
+          <span id="countUncertain">0</span> Unklar
+        </span>
+        <span class="popup__legend-item popup__legend-item--ai">
+          <span class="popup__dot popup__dot--ai"></span>
+          <span id="countAI">0</span> KI
+        </span>
+      </div>
+    </section>
+
+    <section class="popup__options">
+      <label class="popup__option">
+        <input type="checkbox" id="toggleFunMode" checked />
+        <span>Fun-Modus 🎭 (witzige Kommentare)</span>
+      </label>
+    </section>
+
+    <footer class="popup__footer">
+      Erkennung ist probabilistisch — kein Werkzeug ist perfekt 🤷
+    </footer>
+  </div>
+
+  <script src="popup.js"></script>
+</body>
+</html>

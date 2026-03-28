@@ -1,0 +1,33 @@
+# Claude Code (lokale Einstellungen)
+.claude/
+
+# Secrets — niemals in Git!
+backend/local.settings.json
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+*.egg-info/
+dist/
+build/
+.pytest_cache/
+
+# Azure Functions
+bin/
+obj/
+.python_packages/
+
+# Node / Tools
+node_modules/
+.npm/
+
+# VS Code
+.vscode/
+
+# macOS
+.DS_Store
+
+# Windows
+Thumbs.db
