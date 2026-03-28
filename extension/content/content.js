@@ -10,6 +10,7 @@
   let isEnabled = true;
   let isFunMode = true;
   let batchTimer = null;
+  let initialScanDone = false;
 
   // Extension-State aus Storage laden
   const settings = await chrome.storage.local.get(['enabled', 'funMode']);
@@ -38,16 +39,17 @@
   // --- Posts beobachten (initial + bei DOM-Änderungen) ---
   function observeNewPosts() {
     const posts = LinkedInParser.findAllPosts();
-    if (posts.length > 0) {
-      console.log(`[AIDetector] ${posts.length} Post(s) gefunden`);
-    } else {
+    const newPosts = posts.filter(p => !p.dataset.aiDetectorId);
+    if (newPosts.length > 0) {
+      console.log(`[AIDetector] ${newPosts.length} neue Post(s) gefunden`);
+    } else if (!initialScanDone) {
+      // Nur beim ersten Scan diagnostizieren, nicht bei jedem MutationObserver-Aufruf
       LinkedInParser.diagnose();
     }
-    posts.forEach(postEl => {
-      if (!postEl.dataset.aiDetectorId) {
-        postEl.dataset.aiDetectorId = 'pending';
-        observer.observe(postEl);
-      }
+    initialScanDone = true;
+    newPosts.forEach(postEl => {
+      postEl.dataset.aiDetectorId = 'pending';
+      observer.observe(postEl);
     });
   }
 

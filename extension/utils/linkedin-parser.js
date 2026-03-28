@@ -1,5 +1,5 @@
 // linkedin-parser.js — DOM-Selektoren für LinkedIn Posts
-// LinkedIn verwendet obfuskierte CSS-Klassen → nur strukturelle/semantische Selektoren
+// LinkedIn verwendet obfuskierte CSS-Klassen → strukturelle Navigation
 
 const LinkedInParser = {
 
@@ -14,8 +14,7 @@ const LinkedInParser = {
 
     if (semantic.length > 0) return [...new Set(semantic)];
 
-    // Strategie B: LinkedIn verwendet obfuskierte Klassen → strukturell traversieren.
-    // Aufbau: [role="main"] → Scroll-Container → Feed-Liste → Post-Kinder
+    // Strategie B: Strukturelle Navigation für obfuskierte LinkedIn-Klassen
     return this._findPostsByStructure();
   },
 
@@ -23,69 +22,82 @@ const LinkedInParser = {
     const main = document.querySelector('[role="main"]');
     if (!main) return [];
 
-    // Gehe maximal 4 Ebenen tief und suche den Container mit den meisten Kinder-Divs
-    const feedContainer = this._findFeedContainer(main, 4);
-    if (!feedContainer) return [];
+    // Schritt 1: Finde die Hauptfeed-Spalte anhand des "Beitrag beginnen"-Landmarks
+    const feedColumn = this._findFeedColumn(main);
+    if (!feedColumn) return [];
 
-    // Jedes direkte Kind mit genug Text ist ein Post-Kandidat
-    const posts = [];
-    for (const child of feedContainer.children) {
-      if (child.tagName === 'DIV' && this._isLikelyPost(child)) {
-        posts.push(child);
-      }
-    }
+    // Schritt 2: Gehe tiefer bis wir einen Container mit vielen Kinder-Posts finden
+    const postList = this._findPostListContainer(feedColumn, 8);
+    if (!postList) return [];
 
-    // Falls nichts direkt, eine Ebene tiefer suchen
-    if (posts.length === 0) {
-      for (const child of feedContainer.children) {
-        for (const grandchild of child.children) {
-          if (grandchild.tagName === 'DIV' && this._isLikelyPost(grandchild)) {
-            posts.push(grandchild);
-          }
-        }
-      }
-    }
-
-    return posts;
+    // Schritt 3: Kinder des Post-Containers sind die Posts
+    return [...postList.children].filter(el =>
+      el.tagName === 'DIV' && this._isLikelyPost(el)
+    );
   },
 
-  _findFeedContainer(el, depth) {
-    if (depth === 0) return null;
-    // Der Feed-Container hat viele Kinder (Posts) — typisch > 3
+  // Findet die Hauptfeed-Spalte anhand des "Beitrag beginnen"-Landmarks
+  _findFeedColumn(main) {
+    const keywords = ['Beitrag beginnen', 'Start a post', 'Beitrag starten', 'Was bewegt dich', "What's on your mind"];
+    const divs = main.querySelectorAll('div');
     let best = null;
-    let bestCount = 2; // Minimum
-    for (const child of el.children) {
-      const divChildren = [...child.children].filter(c => c.tagName === 'DIV').length;
-      if (divChildren > bestCount) {
-        bestCount = divChildren;
-        best = child;
-      }
-      // Rekursiv in das Kind mit den meisten Div-Kindern schauen
-      const deeper = this._findFeedContainer(child, depth - 1);
-      if (deeper) {
-        const deeperCount = [...deeper.children].filter(c => c.tagName === 'DIV').length;
-        if (deeperCount > bestCount) {
-          bestCount = deeperCount;
-          best = deeper;
-        }
+    let bestLen = Infinity;
+    for (const div of divs) {
+      const text = div.innerText?.trim() || '';
+      if (keywords.some(kw => text.includes(kw)) && text.length < bestLen) {
+        bestLen = text.length;
+        best = div;
       }
     }
-    return best;
+    // Wenn Landmark gefunden: gehe hoch zum Feed-Column-Container
+    if (best) {
+      // Der eigentliche Feed-Spalten-Container ist ein Vorfahre
+      let el = best.parentElement;
+      for (let i = 0; i < 5 && el; i++) {
+        // Sobald der Vorfahre selbst viele div-Kinder hat → das ist der Feed-Container
+        const contentKids = [...(el.parentElement?.children || [])].filter(c =>
+          c.innerText?.trim().length > 200
+        );
+        if (contentKids.length >= 2) return el;
+        el = el.parentElement;
+      }
+      return best.parentElement;
+    }
+    return null;
+  },
+
+  // Geht tief in einen Container und findet die Ebene mit den meisten Post-Kandidaten
+  _findPostListContainer(el, maxDepth) {
+    if (maxDepth === 0 || !el) return null;
+
+    const contentChildren = [...el.children].filter(c =>
+      c.tagName === 'DIV' && (c.innerText?.trim().length || 0) > 100
+    );
+
+    // Wenn wir 3+ Kinder mit Inhalt finden: das ist die Post-Liste
+    if (contentChildren.length >= 3) return el;
+
+    // Sonst: tiefer in das Kind mit dem meisten Inhalt
+    let richest = null, maxLen = 0;
+    for (const child of el.children) {
+      const len = child.innerText?.trim().length || 0;
+      if (len > maxLen) { maxLen = len; richest = child; }
+    }
+    return richest ? this._findPostListContainer(richest, maxDepth - 1) : null;
   },
 
   _isLikelyPost(el) {
-    // Muss genug Text haben um ein Post zu sein
     const text = el.innerText?.trim() || '';
-    if (text.length < 80) return false;
-    // Darf nicht selbst Kind eines bereits erkannten Posts sein
-    // (verhindert, dass wir verschachtelte Elemente doppelt zählen)
+    // Muss echten Post-Text haben: nicht zu kurz, nicht zu lang (kein ganzer Feed)
+    if (text.length < 100 || text.length > 15000) return false;
+    // Darf nicht selbst innerhalb eines markierten Posts sein
     if (el.closest('[data-ai-detector-id]')) return false;
     return true;
   },
 
   extractText(postEl) {
-    // Strategie 1: Explizite Text-Selektoren (wenn noch vorhanden)
-    const explicitSelectors = [
+    // Explizite Text-Selektoren
+    const selectors = [
       '[class*="update-components-text"]',
       '[class*="feed-shared-inline-show-more"]',
       '[class*="attributed-text-segment-list"]',
@@ -94,7 +106,7 @@ const LinkedInParser = {
       '.feed-shared-text',
       '[class*="commentary"]',
     ];
-    for (const sel of explicitSelectors) {
+    for (const sel of selectors) {
       try {
         const el = postEl.querySelector(sel);
         const t = el?.innerText?.trim();
@@ -102,17 +114,16 @@ const LinkedInParser = {
       } catch (e) { /* weiter */ }
     }
 
-    // Strategie 2: Längstes span[dir="ltr"] — LinkedIn verwendet dir="ltr" für Post-Text
+    // dir="ltr" — LinkedIn setzt das für Post-Texte
     let best = '';
-    postEl.querySelectorAll('span[dir="ltr"], div[dir="ltr"]').forEach(el => {
+    postEl.querySelectorAll('[dir="ltr"]').forEach(el => {
       const t = el.innerText?.trim() || '';
       if (t.length > best.length && t.length < 5000) best = t;
     });
     if (best.length > 50) return best;
 
-    // Strategie 3: Längster Text-Block (letzter Fallback)
+    // Letzter Fallback: längster einfacher Text-Block
     postEl.querySelectorAll('span, p').forEach(el => {
-      // Nur direkte Text-Elemente, keine tief verschachtelten Container
       if (el.children.length < 5) {
         const t = el.innerText?.trim() || '';
         if (t.length > best.length && t.length < 5000) best = t;
@@ -122,11 +133,7 @@ const LinkedInParser = {
   },
 
   extractAuthor(postEl) {
-    const selectors = [
-      '[class*="actor__name"]',
-      '[class*="update-components-actor"]',
-      '[class*="feed-shared-actor"]',
-    ];
+    const selectors = ['[class*="actor__name"]', '[class*="update-components-actor"]'];
     for (const sel of selectors) {
       try {
         const el = postEl.querySelector(sel);
@@ -150,28 +157,18 @@ const LinkedInParser = {
     console.log(`Posts gefunden: ${posts.length}`);
     posts.slice(0, 3).forEach((p, i) => {
       const text = this.extractText(p);
-      console.log(`Post ${i+1}: tag=${p.tagName} text="${(text||'–').slice(0,80)}"`);
+      console.log(`Post ${i + 1}: text="${(text || '–').slice(0, 80)}"`);
     });
     if (posts.length === 0) {
-      console.warn('Keine Posts gefunden. DOM-Snapshot:');
       const main = document.querySelector('[role="main"]');
+      const feedCol = main ? this._findFeedColumn(main) : null;
+      const postList = feedCol ? this._findPostListContainer(feedCol, 8) : null;
       console.table({
-        'article': document.querySelectorAll('article').length,
-        '[data-id]': document.querySelectorAll('[data-id]').length,
-        '[data-urn]': document.querySelectorAll('[data-urn]').length,
-        '[data-view-name]': document.querySelectorAll('[data-view-name]').length,
         '[role="main"]': main ? 1 : 0,
+        'feed column': feedCol ? 1 : 0,
+        'post list container': postList ? 1 : 0,
+        'post list children': postList?.children.length ?? 0,
       });
-      if (main) {
-        const feed = this._findFeedContainer(main, 4);
-        console.log('Feed-Container gefunden:', feed ? `${feed.tagName} mit ${feed.children.length} Kindern` : 'NEIN');
-        if (feed) {
-          [...feed.children].slice(0, 3).forEach((c, i) => {
-            const txt = c.innerText?.trim().slice(0, 60) || '';
-            console.log(`  Post-Kandidat ${i}: ${c.tagName} children=${c.children.length} text="${txt}"`);
-          });
-        }
-      }
     }
     console.groupEnd();
   },
