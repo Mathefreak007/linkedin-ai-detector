@@ -40,6 +40,8 @@
     const posts = LinkedInParser.findAllPosts();
     if (posts.length > 0) {
       console.log(`[AIDetector] ${posts.length} Post(s) gefunden`);
+    } else {
+      LinkedInParser.diagnose();
     }
     posts.forEach(postEl => {
       if (!postEl.dataset.aiDetectorId) {
