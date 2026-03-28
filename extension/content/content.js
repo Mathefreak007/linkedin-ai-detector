@@ -52,7 +52,12 @@
   }
 
   // MutationObserver für dynamisch geladene Posts (Infinite Scroll)
-  const mutationObserver = new MutationObserver(() => observeNewPosts());
+  // Debounce: nicht bei jeder einzelnen DOM-Änderung feuern
+  let mutationTimer = null;
+  const mutationObserver = new MutationObserver(() => {
+    clearTimeout(mutationTimer);
+    mutationTimer = setTimeout(observeNewPosts, 800);
+  });
   mutationObserver.observe(document.body, { childList: true, subtree: true });
 
   observeNewPosts();
