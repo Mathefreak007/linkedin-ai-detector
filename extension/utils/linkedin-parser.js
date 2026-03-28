@@ -4,36 +4,73 @@
 const LinkedInParser = {
 
   findAllPosts() {
-    const found = new Set();
+    // Strategie A: semantische Attribute (ältere LinkedIn-Versionen)
+    const semantic = [
+      ...[...document.querySelectorAll('article')],
+      ...[...document.querySelectorAll('[data-id*="activity"],[data-id*="ugcPost"]')],
+      ...[...document.querySelectorAll('[data-urn*="activity"],[data-urn*="ugcPost"]')],
+      ...[...document.querySelectorAll('[data-view-name*="feed-full-update"],[data-view-name*="feed-update"]')],
+    ].filter(el => this._isLikelyPost(el));
 
-    // Strategie 1: <article> Elemente (semantisch stabil, LinkedIn benutzt sie für Feed-Posts)
-    document.querySelectorAll('article').forEach(el => {
-      if (this._isLikelyPost(el)) found.add(el);
-    });
+    if (semantic.length > 0) return [...new Set(semantic)];
 
-    // Strategie 2: data-id mit activity-URN (LinkedIn interne IDs)
-    document.querySelectorAll('[data-id*="activity"],[data-id*="ugcPost"],[data-id*="share"]').forEach(el => {
-      if (this._isLikelyPost(el)) found.add(el);
-    });
+    // Strategie B: LinkedIn verwendet obfuskierte Klassen → strukturell traversieren.
+    // Aufbau: [role="main"] → Scroll-Container → Feed-Liste → Post-Kinder
+    return this._findPostsByStructure();
+  },
 
-    // Strategie 3: data-urn (ältere LinkedIn-Struktur, könnte noch vorhanden sein)
-    document.querySelectorAll('[data-urn*="activity"],[data-urn*="ugcPost"]').forEach(el => {
-      if (this._isLikelyPost(el)) found.add(el);
-    });
+  _findPostsByStructure() {
+    const main = document.querySelector('[role="main"]');
+    if (!main) return [];
 
-    // Strategie 4: data-view-name (neuere LinkedIn-Struktur)
-    document.querySelectorAll('[data-view-name*="feed"],[data-view-name*="post"],[data-view-name*="update"]').forEach(el => {
-      if (this._isLikelyPost(el)) found.add(el);
-    });
+    // Gehe maximal 4 Ebenen tief und suche den Container mit den meisten Kinder-Divs
+    const feedContainer = this._findFeedContainer(main, 4);
+    if (!feedContainer) return [];
 
-    // Strategie 5: li-Elemente im Feed mit genug Text (struktureller Fallback)
-    if (found.size === 0) {
-      document.querySelectorAll('main li, [role="main"] li').forEach(el => {
-        if (this._isLikelyPost(el)) found.add(el);
-      });
+    // Jedes direkte Kind mit genug Text ist ein Post-Kandidat
+    const posts = [];
+    for (const child of feedContainer.children) {
+      if (child.tagName === 'DIV' && this._isLikelyPost(child)) {
+        posts.push(child);
+      }
     }
 
-    return Array.from(found);
+    // Falls nichts direkt, eine Ebene tiefer suchen
+    if (posts.length === 0) {
+      for (const child of feedContainer.children) {
+        for (const grandchild of child.children) {
+          if (grandchild.tagName === 'DIV' && this._isLikelyPost(grandchild)) {
+            posts.push(grandchild);
+          }
+        }
+      }
+    }
+
+    return posts;
+  },
+
+  _findFeedContainer(el, depth) {
+    if (depth === 0) return null;
+    // Der Feed-Container hat viele Kinder (Posts) — typisch > 3
+    let best = null;
+    let bestCount = 2; // Minimum
+    for (const child of el.children) {
+      const divChildren = [...child.children].filter(c => c.tagName === 'DIV').length;
+      if (divChildren > bestCount) {
+        bestCount = divChildren;
+        best = child;
+      }
+      // Rekursiv in das Kind mit den meisten Div-Kindern schauen
+      const deeper = this._findFeedContainer(child, depth - 1);
+      if (deeper) {
+        const deeperCount = [...deeper.children].filter(c => c.tagName === 'DIV').length;
+        if (deeperCount > bestCount) {
+          bestCount = deeperCount;
+          best = deeper;
+        }
+      }
+    }
+    return best;
   },
 
   _isLikelyPost(el) {
@@ -117,20 +154,23 @@ const LinkedInParser = {
     });
     if (posts.length === 0) {
       console.warn('Keine Posts gefunden. DOM-Snapshot:');
-      const main = document.querySelector('main, [role="main"]');
-      const stats = {
+      const main = document.querySelector('[role="main"]');
+      console.table({
         'article': document.querySelectorAll('article').length,
         '[data-id]': document.querySelectorAll('[data-id]').length,
         '[data-urn]': document.querySelectorAll('[data-urn]').length,
         '[data-view-name]': document.querySelectorAll('[data-view-name]').length,
-        'main li': document.querySelectorAll('main li').length,
-      };
-      console.table(stats);
+        '[role="main"]': main ? 1 : 0,
+      });
       if (main) {
-        console.log('main/role=main gefunden:', main.tagName, main.className.slice(0, 80));
-        [...main.children].slice(0, 3).forEach((c, i) =>
-          console.log(`  Kind ${i}: ${c.tagName} class="${c.className.slice(0, 80)}"`)
-        );
+        const feed = this._findFeedContainer(main, 4);
+        console.log('Feed-Container gefunden:', feed ? `${feed.tagName} mit ${feed.children.length} Kindern` : 'NEIN');
+        if (feed) {
+          [...feed.children].slice(0, 3).forEach((c, i) => {
+            const txt = c.innerText?.trim().slice(0, 60) || '';
+            console.log(`  Post-Kandidat ${i}: ${c.tagName} children=${c.children.length} text="${txt}"`);
+          });
+        }
       }
     }
     console.groupEnd();
