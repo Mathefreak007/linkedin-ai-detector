@@ -18,6 +18,9 @@
 
   if (!isEnabled) return;
 
+  console.log('[AIDetector] ✅ Script geladen. Suche Posts...');
+  // Diagnose-Funktion: LinkedInParser.diagnose() in Console aufrufen
+
   // --- IntersectionObserver mit 600px Vorlauf (Prefetching) ---
   const observer = new IntersectionObserver(
     (entries) => {
@@ -34,7 +37,11 @@
 
   // --- Posts beobachten (initial + bei DOM-Änderungen) ---
   function observeNewPosts() {
-    LinkedInParser.findAllPosts().forEach(postEl => {
+    const posts = LinkedInParser.findAllPosts();
+    if (posts.length > 0) {
+      console.log(`[AIDetector] ${posts.length} Post(s) gefunden`);
+    }
+    posts.forEach(postEl => {
       if (!postEl.dataset.aiDetectorId) {
         postEl.dataset.aiDetectorId = 'pending';
         observer.observe(postEl);
