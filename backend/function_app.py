@@ -57,6 +57,17 @@ def _cache_set(key: str, result: dict) -> None:
     _cache[key] = (result, datetime.utcnow() + CACHE_TTL)
 
 
+def _parse_body(req: func.HttpRequest) -> dict:
+    """JSON-Parsing: get_json() mit Bytes-Fallback."""
+    try:
+        result = req.get_json()
+        if isinstance(result, dict):
+            return result
+    except Exception:
+        pass
+    return json.loads(req.get_body())
+
+
 def _call_openai(system_prompt: str, user_prompt: str) -> str:
     """Ruft Azure OpenAI auf und gibt den Roh-String zurück."""
     response = client.chat.completions.create(
@@ -69,7 +80,7 @@ def _call_openai(system_prompt: str, user_prompt: str) -> str:
         temperature=0.3,
         response_format={"type": "json_object"},
     )
-    return response.choices[0].message.content
+    return response.choices[0].message.content or ""
 
 
 def _cors_headers() -> dict:
@@ -90,7 +101,7 @@ def detect(req: func.HttpRequest) -> func.HttpResponse:
         return func.HttpResponse(status_code=204, headers=headers)
 
     try:
-        body = req.get_json()
+        body = _parse_body(req)
         text = body.get("text", "").strip()
         lang = body.get("lang", "de")
 
@@ -109,8 +120,8 @@ def detect(req: func.HttpRequest) -> func.HttpResponse:
 
         # OpenAI aufrufen
         user_prompt = build_single_user_prompt(text, lang)
-        raw = _call_openai(SYSTEM_PROMPT_SINGLE, user_prompt)
-        parsed = json.loads(raw)
+        raw_response = _call_openai(SYSTEM_PROMPT_SINGLE, user_prompt)
+        parsed = json.loads(raw_response)
 
         score = float(parsed.get("score", 0.5))
         result = {
@@ -124,9 +135,9 @@ def detect(req: func.HttpRequest) -> func.HttpResponse:
         _cache_set(hash_key, result)
         return func.HttpResponse(json.dumps(result), headers=headers)
 
-    except json.JSONDecodeError:
+    except (json.JSONDecodeError, UnicodeDecodeError) as e:
         return func.HttpResponse(
-            json.dumps({"error": "Ungültiges JSON."}),
+            json.dumps({"error": "Ungültiges JSON.", "detail": str(e)}),
             status_code=400, headers=headers,
         )
     except Exception as e:
@@ -146,7 +157,7 @@ def detect_batch(req: func.HttpRequest) -> func.HttpResponse:
         return func.HttpResponse(status_code=204, headers=headers)
 
     try:
-        body = req.get_json()
+        body = _parse_body(req)
         posts = body.get("posts", [])
 
         if not posts or len(posts) > 5:

@@ -3,7 +3,7 @@
 const AIDetectorAPI = {
   // In Produktion: Azure Functions URL
   // Lokal: http://localhost:7071
-  BASE_URL: 'http://localhost:7071',
+  BASE_URL: 'https://func-linkedin-detector.azurewebsites.net',
 
   TIMEOUT_MS: 10000,
 
