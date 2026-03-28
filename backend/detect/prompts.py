@@ -35,16 +35,18 @@ Achte auf diese Signale:
   "Es ist wichtig zu beachten...", "Zusammenfassend lässt sich sagen..."
 - Emoji-Overload in Kombination mit perfekter Grammatik
 
-Antworte NUR mit einem JSON-Array — ein Objekt pro Text:
-[
-  {
-    "id": "<id aus der Eingabe>",
-    "score": <float 0.0-1.0>,
-    "signals": ["signal1", "signal2"],
-    "explanation": "<kurze sachliche Erklärung, max. 100 Zeichen>",
-    "humor": "<witziger Einzeiler zum Ergebnis>"
-  }
-]"""
+Antworte NUR mit einem JSON-Objekt mit einem "results"-Array:
+{
+  "results": [
+    {
+      "id": "<id aus der Eingabe>",
+      "score": <float 0.0-1.0>,
+      "signals": ["signal1", "signal2"],
+      "explanation": "<kurze sachliche Erklärung, max. 100 Zeichen>",
+      "humor": "<witziger Einzeiler zum Ergebnis>"
+    }
+  ]
+}"""
 
 HUMOR_FALLBACKS = [
     "Dieser Post wurde mit hoher Wahrscheinlichkeit von einer KI geschrieben. Die restlichen % sind der Copy-Paste-Button.",

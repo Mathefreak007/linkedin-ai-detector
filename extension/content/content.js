@@ -170,10 +170,10 @@
     const pct = Math.round(score * 100);
     if (!funMode) return `${pct}%`;
 
-    if (score >= 0.85) return `STRG+V aus ChatGPT 🤖`;
-    if (score >= 0.60) return `GPT hat mitgeholfen`;
-    if (score >= 0.30) return `Hmm... 🤔`;
-    return `Echt! (wahrscheinlich)`;
+    if (score >= 0.85) return `${pct}% · STRG+V aus ChatGPT 🤖`;
+    if (score >= 0.60) return `${pct}% · GPT hat mitgeholfen`;
+    if (score >= 0.30) return `${pct}% · Hmm... 🤔`;
+    return `${pct}% · Echt!`;
   }
 
   function updatePageStats(label) {
